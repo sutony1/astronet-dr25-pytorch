@@ -3,6 +3,16 @@
 这是针对本项目的现代 PyTorch 复现，网络结构以 Google Research 的
 TensorFlow AstroNet 配置为准，NASA FDL 的 PyTorch 版本仅作为交叉参考。
 
+## 在线阅读
+
+项目网站：[Kepler系外行星机器学习](https://sutony1.github.io/astronet-dr25-pytorch/)
+
+- 《从星光变暗到候选行星》：Kepler DR25与光变曲线入门
+- 《AstroNet-DR25-PyTorch训练与架构详解》：双分支1D-CNN和M2实验结果
+
+网站的静态HTML位于 `docs/`，两篇原始Markdown位于 `site-content/`，
+可通过 `site-tools/build-site.mjs` 重新生成。
+
 ## 项目状态
 
 本仓库包含可复现的PyTorch模型、Kepler DR25预处理、按KIC分组的数据划分、
