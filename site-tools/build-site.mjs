@@ -159,11 +159,11 @@ function articlePage(article, title, subtitle, rendered, previous, next) {
     </div>
   </section>
   <div class="toc-toolbar">
-    <button class="toc-toggle" type="button" aria-expanded="true" aria-controls="article-toc">隐藏本文目录</button>
+    <button class="toc-toggle" type="button" aria-expanded="false" aria-controls="article-toc">显示本文目录</button>
   </div>
-  <div class="article-layout">
+  <div class="article-layout toc-collapsed">
     <aside class="toc-panel">
-      <nav class="toc" id="article-toc" aria-label="本文目录"><p>本文目录</p>${tocHtml(rendered.headings)}</nav>
+      <nav class="toc" id="article-toc" aria-label="本文目录" hidden><p>本文目录</p>${tocHtml(rendered.headings)}</nav>
     </aside>
     <article class="prose">${rendered.html}</article>
   </div>
