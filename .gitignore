@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+
+# Kepler/TESS raw and processed data
+data/
+downloads/
+lightcurves_raw/
+manifests/
+views/
+*.fits
+*.fits.gz
+*.npy
+*.npz
+*.parquet
+
+# Training outputs and model weights
+experiments/
+checkpoints/
+logs/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Generated comparisons and temporary files
+reports/
+tmp/
+node_modules/
+

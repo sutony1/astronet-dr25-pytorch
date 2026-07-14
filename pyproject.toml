@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "astronet-dr25-pytorch"
+version = "0.1.0"
+description = "A modern PyTorch reproduction of AstroNet for Kepler DR25 transit classification"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.0",
+  "pyarrow>=15.0",
+  "torch>=2.1",
+  "scikit-learn>=1.4",
+  "matplotlib>=3.8",
+  "astropy>=6.0",
+  "requests>=2.31",
+  "urllib3>=2.0",
+  "pydl==1.0.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
