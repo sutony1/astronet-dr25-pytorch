@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Kepler DR25与AstroNet PyTorch复现项目：两篇中文科普长文、完整图表与公开源代码。">
+  <meta name="theme-color" content="#17324d">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Kepler系外行星机器学习">
+  <meta property="og:description" content="Kepler DR25与AstroNet PyTorch复现项目：两篇中文科普长文、完整图表与公开源代码。">
+  <meta property="og:url" content="https://sutony1.github.io/astronet-dr25-pytorch/">
+  <meta property="og:image" content="https://sutony1.github.io/astronet-dr25-pytorch/assets/astronet/08_astronet_layer_by_layer.png">
+  <link rel="canonical" href="https://sutony1.github.io/astronet-dr25-pytorch/">
+  <link rel="icon" type="image/png" href="assets/guide/kepler-field.png">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="site.js"></script>
+  <title>Kepler系外行星机器学习 · Kepler系外行星机器学习</title>
+</head>
+<body>
+
+<header class="site-header home-header">
+  <a class="brand" href="index.html"><span class="brand-mark">K</span><span>Kepler系外行星机器学习</span></a>
+  <nav aria-label="主导航"><a href="#articles">文章</a><a href="#results">研究结果</a><a href="https://github.com/sutony1/astronet-dr25-pytorch">GitHub</a></nav>
+</header>
+<main>
+  <section class="home-hero">
+    <div class="home-hero-copy">
+      <p class="eyebrow">KEPLER DR25 · ASTRONET · PYTORCH</p>
+      <h1>从星光变暗，<br><span>走到神经网络。</span></h1>
+      <p class="lead">在一台双RTX 3090工作站上，复现Kepler系外行星分类流程。这里把天文数据、1D-CNN、训练结果和公共数据库核对，讲成两篇任何人都能读懂的文章。</p>
+      <div class="hero-actions"><a class="button primary" href="#articles">开始阅读</a><a class="button secondary" href="https://github.com/sutony1/astronet-dr25-pytorch">查看源代码</a></div>
+    </div>
+    <div class="hero-visual">
+      <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="star"></div><div class="planet"></div>
+      <div class="signal-card"><span>相对亮度</span><div class="signal-line"></div><strong>周期性凌星</strong></div>
+    </div>
+  </section>
+  <section class="metrics" id="results" aria-label="核心研究数据">
+    <div><strong>1,000</strong><span>颗恒星</span></div><div><strong>1,164</strong><span>个TCE</span></div><div><strong>84.12%</strong><span>测试准确率</span></div><div><strong>79</strong><span>个当前确认行星信号</span></div>
+  </section>
+  <section class="articles-section" id="articles">
+    <div class="section-heading"><p class="eyebrow">两篇完整长文</p><h2>从基础天文，到可复现的深度学习</h2><p>HTML保留Markdown全文、图表和代码，并提供原版PDF下载。</p></div>
+    <div class="article-cards">
+      <article class="article-card guide-card">
+        <a class="card-image" href="articles/kepler-dr25-guide.html"><img src="assets/guide/kepler-field.png" alt="Kepler原始视场示意图"></a>
+        <div class="card-body"><p class="eyebrow">Kepler DR25 · 入门科普</p><h3><a href="articles/kepler-dr25-guide.html">从星光变暗到候选行星</a></h3><p>从凌星法、FITS与TCE开始，逐步读懂Kepler光变曲线、候选体与假阳性。</p><p class="card-meta">M0阶段 · 100颗恒星 · 1,569个FITS</p><div class="card-actions"><a href="articles/kepler-dr25-guide.html">阅读全文 →</a><a href="pdf/kepler-dr25-guide.pdf" download>PDF</a></div></div>
+      </article>
+      <article class="article-card training-card">
+        <a class="card-image" href="articles/astronet-training.html"><img src="assets/astronet/08_astronet_layer_by_layer.png" alt="AstroNet逐层网络架构图"></a>
+        <div class="card-body"><p class="eyebrow">AstroNet · 深度学习复现</p><h3><a href="articles/astronet-training.html">AstroNet-DR25-PyTorch 训练与架构详解</a></h3><p>完整解释双分支1D-CNN、数据预处理、训练划分、Robovetter对照与M2实验结果。</p><p class="card-meta">M2阶段 · 1,000颗恒星 · 1,164个TCE</p><div class="card-actions"><a href="articles/astronet-training.html">阅读全文 →</a><a href="pdf/astronet-training.pdf" download>PDF</a></div></div>
+      </article>
+    </div>
+  </section>
+  <section class="method-section">
+    <div><p class="eyebrow">完整研究链路</p><h2>不是把FITS当图片，而是把星光变成可学习的序列</h2></div>
+    <ol><li><span>01</span><strong>NASA目录与FITS</strong><p>连接TCE、KOI、恒星参数和季度光变。</p></li><li><span>02</span><strong>相位折叠</strong><p>生成2001点global和201点local视图。</p></li><li><span>03</span><strong>双分支1D-CNN</strong><p>单张RTX 3090训练AstroNet基线。</p></li><li><span>04</span><strong>公共目录核对</strong><p>区分模型候选、当前确认行星与假阳性。</p></li></ol>
+  </section>
+</main>
+<footer class="site-footer"><p>Kepler DR25 × AstroNet PyTorch · 研究与科普记录</p><a href="https://github.com/sutony1/astronet-dr25-pytorch">GitHub公开仓库</a></footer>
+</body>
+</html>

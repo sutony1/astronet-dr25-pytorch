@@ -1,0 +1,12 @@
+{
+  "name": "astronet-pages-builder",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build-site.mjs",
+    "check": "node validate-site.mjs"
+  },
+  "dependencies": {
+    "marked": "^16.0.0"
+  }
+}

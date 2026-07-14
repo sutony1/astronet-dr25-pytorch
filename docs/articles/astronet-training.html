@@ -1,0 +1,1651 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="完整解释双分支1D-CNN、数据预处理、训练划分、Robovetter对照与M2实验结果。">
+  <meta name="theme-color" content="#17324d">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="AstroNet-DR25-PyTorch 训练与架构详解">
+  <meta property="og:description" content="完整解释双分支1D-CNN、数据预处理、训练划分、Robovetter对照与M2实验结果。">
+  <meta property="og:url" content="https://sutony1.github.io/astronet-dr25-pytorch/articles/astronet-training.html">
+  <meta property="og:image" content="https://sutony1.github.io/astronet-dr25-pytorch/assets/astronet/08_astronet_layer_by_layer.png">
+  <link rel="canonical" href="https://sutony1.github.io/astronet-dr25-pytorch/articles/astronet-training.html">
+  <link rel="icon" type="image/png" href="../assets/guide/kepler-field.png">
+  <link rel="stylesheet" href="../styles.css">
+  <script defer src="../site.js"></script>
+  <title>AstroNet-DR25-PyTorch 训练与架构详解 · Kepler系外行星机器学习</title>
+</head>
+<body class="article-page">
+
+<div class="reading-progress" aria-hidden="true"><span></span></div>
+<header class="site-header">
+  <a class="brand" href="../index.html"><span class="brand-mark">K</span><span>Kepler系外行星机器学习</span></a>
+  <nav aria-label="主导航"><a href="../index.html">首页</a><a href="https://github.com/sutony1/astronet-dr25-pytorch">源代码</a></nav>
+</header>
+<main>
+  <section class="article-hero">
+    <div class="article-hero-inner">
+      <p class="eyebrow">AstroNet · 深度学习复现</p>
+      <h1>AstroNet-DR25-PyTorch 训练与架构详解</h1>
+      <p class="subtitle">从 Kepler FITS、TCE 到双分支 1D-CNN</p>
+      <p class="article-meta">M2阶段 · 1,000颗恒星 · 1,164个TCE · 2026-07-14研究记录</p>
+      <div class="hero-actions">
+        <a class="button primary" href="../pdf/astronet-training.pdf" download>下载PDF</a>
+        <a class="button secondary" href="https://github.com/sutony1/astronet-dr25-pytorch">查看GitHub</a>
+      </div>
+    </div>
+  </section>
+  <div class="article-layout">
+    <aside class="toc-panel">
+      <button class="toc-toggle" type="button" aria-expanded="false">展开本文目录</button>
+      <nav class="toc" aria-label="本文目录"><p>本文目录</p><a class="toc-level-2" href="#section-1">1. 先给初学者一个完整答案</a>
+<a class="toc-level-2" href="#section-2">2. FITS不是图片，TCE也不是文件</a>
+<a class="toc-level-3" href="#section-3">2.1 FITS是什么</a>
+<a class="toc-level-3" href="#section-4">2.2 KIC是什么</a>
+<a class="toc-level-3" href="#section-5">2.3 TCE是什么</a>
+<a class="toc-level-3" href="#section-6">2.4 TCE、KOI和确认行星不是同一个概念</a>
+<a class="toc-level-2" href="#section-7">3. 为什么要先去趋势和相位折叠</a>
+<a class="toc-level-2" href="#section-8">4. AstroNet的输入到底是什么</a>
+<a class="toc-level-3" href="#section-9">4.1 global view：2001点</a>
+<a class="toc-level-3" href="#section-10">4.2 local view：201点</a>
+<a class="toc-level-3" href="#section-11">4.3 为什么要同时使用两个视图</a>
+<a class="toc-level-2" href="#section-12">5. 图像CNN与1D-CNN有什么区别</a>
+<a class="toc-level-3" href="#section-13">5.1 图像中的2D卷积</a>
+<a class="toc-level-3" href="#section-14">5.2 光变曲线中的1D卷积</a>
+<a class="toc-level-3" href="#section-15">5.3 二者的共同点</a>
+<a class="toc-level-3" href="#section-16">5.4 为什么1D-CNN适合相位折叠光变</a>
+<a class="toc-level-2" href="#section-17">6. AstroNet双分支网络逐层拆解</a>
+<a class="toc-level-3" href="#section-18">6.1 教科书式逐层展开图应该怎样读</a>
+<a class="toc-level-3" href="#section-19">6.2 1D卷积核究竟是什么</a>
+<a class="toc-level-3" href="#section-20">6.3 一个卷积块是什么</a>
+<a class="toc-level-3" href="#section-21">6.4 global分支</a>
+<a class="toc-level-3" href="#section-22">6.5 local分支</a>
+<a class="toc-level-3" href="#section-23">6.6 拼接与全连接分类器</a>
+<a class="toc-level-3" href="#section-24">6.7 为什么没有直接照搬NASA FDL PyTorch代码</a>
+<a class="toc-level-2" href="#section-25">7. MaxPool在一维网络里做什么</a>
+<a class="toc-level-2" href="#section-26">8. train、validation、test如何划分</a>
+<a class="toc-level-3" href="#section-27">8.1 train训练集</a>
+<a class="toc-level-3" href="#section-28">8.2 validation验证集</a>
+<a class="toc-level-3" href="#section-29">8.3 test测试集</a>
+<a class="toc-level-3" href="#section-30">8.4 为什么不是随机按TCE逐行切分</a>
+<a class="toc-level-2" href="#section-31">9. 标签从哪里来</a>
+<a class="toc-level-2" href="#section-32">10. Robovetter是什么算法</a>
+<a class="toc-level-3" href="#section-33">10.1 koi_score是什么意思</a>
+<a class="toc-level-3" href="#section-34">10.2 AstroNet与Robovetter的根本区别</a>
+<a class="toc-level-2" href="#section-35">11. 今天具体做了什么</a>
+<a class="toc-level-3" href="#section-36">11.1 官方与参考代码核对</a>
+<a class="toc-level-3" href="#section-37">11.2 pilot100真实FITS闭环</a>
+<a class="toc-level-3" href="#section-38">11.3 单GPU五轮冒烟训练</a>
+<a class="toc-level-3" href="#section-39">11.4 从100颗恒星扩展到1000颗</a>
+<a class="toc-level-3" href="#section-40">11.5 M2测试结果：模型不再全部判正</a>
+<a class="toc-level-3" href="#section-41">11.6 与NASA当前公共目录交叉核对：121个模型候选中有79个已确认行星</a>
+<a class="toc-level-3" href="#section-42">11.7 这79颗已确认行星离地球多远</a>
+<a class="toc-level-2" href="#section-43">12. 如何读准确率、精确率和召回率</a>
+<a class="toc-level-2" href="#section-44">13. 为什么当前Robovetter比较不是公平决赛</a>
+<a class="toc-level-2" href="#section-45">14. 全量监督数据有多大</a>
+<a class="toc-level-2" href="#section-46">15. M2之后怎样走向全量正式实验</a>
+<a class="toc-level-2" href="#section-47">16. 常见问题</a>
+<a class="toc-level-3" href="#section-48">16.1 一颗恒星是否只生成一个训练样本</a>
+<a class="toc-level-3" href="#section-49">16.2 2001点和201点是不是原始观测点</a>
+<a class="toc-level-3" href="#section-50">16.3 为什么global是奇数2001，local是奇数201</a>
+<a class="toc-level-3" href="#section-51">16.4 双3090为什么只用一张</a>
+<a class="toc-level-3" href="#section-52">16.5 AstroNet输出高分是否等于发现新行星</a>
+<a class="toc-level-2" href="#section-53">17. AstroNet找回的79个当前已确认行星及距离</a>
+<a class="toc-level-2" href="#section-54">18. 资料来源</a></nav>
+    </aside>
+    <article class="prose"><blockquote>
+<p>本文记录 2026-07-14 在 E5 双 RTX 3090 工作站上完成的 AstroNet-PyTorch 复现实验：先用100颗恒星跑通小闭环，再扩展到1000颗恒星、1164个TCE完成20轮训练。文章从零解释网络架构、1D卷积、Robovetter、FITS与TCE的关系，以及 train、validation、test 为什么必须按恒星划分。基线始终只使用第一张 RTX 3090，第二张显卡不参与，以减少实验变量。</p>
+</blockquote>
+<h2 id="section-1">1. 先给初学者一个完整答案<a class="heading-anchor" href="#section-1" aria-label="链接到本节">#</a></h2>
+<p>今天跑通的模型确实采用传统机器学习中熟悉的三类数据集：</p>
+<ul>
+<li><strong>train</strong>：训练集，用来计算损失、反向传播并修改网络权重。</li>
+<li><strong>validation</strong>：验证集，用来选择模型、训练轮数、阈值和超参数，不直接修改权重。</li>
+<li><strong>test</strong>：测试集，只在模型方案固定后做最终评价，不能反复拿来调模型。</li>
+</ul>
+<p>但是天文时序数据还有一个比普通图片分类更容易踩坑的要求：<strong>必须按 KIC 恒星编号分组划分</strong>。同一颗恒星的全部季度FITS、全部TCE都只能进入其中一个集合，否则模型可能在训练集和测试集中同时见到同一颗星，形成数据泄漏。</p>
+<p>实验分成两个阶段。第一阶段 pilot100 用于确认完整流程能够运行，共生成110个有标签TCE：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>集合</th>
+<th align="right">TCE样本数</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>train</td>
+<td align="right">66</td>
+<td>更新模型权重</td>
+</tr>
+<tr>
+<td>validation</td>
+<td align="right">22</td>
+<td>选择最佳轮次和检查泛化</td>
+</tr>
+<tr>
+<td>test</td>
+<td align="right">22</td>
+<td>最终小样本流程检查</td>
+</tr>
+</tbody></table></div>
+<p>KIC跨集合泄漏数为0。</p>
+<p>第二阶段M2把唯一恒星扩大到1000颗，并固定500颗纯候选体宿主和500颗纯假阳性宿主。由于一颗恒星可能含多个TCE，最终得到1164个训练样本：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>集合</th>
+<th align="right">TCE样本数</th>
+<th align="right">候选体</th>
+<th align="right">假阳性</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>train</td>
+<td align="right">698</td>
+<td align="right">396</td>
+<td align="right">302</td>
+</tr>
+<tr>
+<td>validation</td>
+<td align="right">233</td>
+<td align="right">132</td>
+<td align="right">101</td>
+</tr>
+<tr>
+<td>test</td>
+<td align="right">233</td>
+<td align="right">132</td>
+<td align="right">101</td>
+</tr>
+</tbody></table></div>
+<p>两个阶段都严格按KIC分组，M2的 <code>kic_leakage_max_splits=1</code>，表示每颗恒星只出现在一个集合中。</p>
+<figure><img src="../assets/astronet/01_fits_tce_pipeline.png" alt="FITS、TCE、固定长度视图和模型之间的关系" loading="lazy"><figcaption>FITS、TCE、固定长度视图和模型之间的关系</figcaption></figure>
+<h2 id="section-2">2. FITS不是图片，TCE也不是文件<a class="heading-anchor" href="#section-2" aria-label="链接到本节">#</a></h2>
+<h3 id="section-3">2.1 FITS是什么<a class="heading-anchor" href="#section-3" aria-label="链接到本节">#</a></h3>
+<p>FITS是天文学常用的数据容器格式。Kepler long-cadence FITS的核心不是一张给人看的照片，而是一张数值表，其中包括：</p>
+<ul>
+<li><code>TIME</code>：每次观测的时间。</li>
+<li><code>PDCSAP_FLUX</code>：经过Kepler管线校正的恒星亮度。</li>
+<li><code>SAP_QUALITY</code>：该次观测可能存在何种质量问题的标记。</li>
+<li>头部元数据：季度、目标编号、观测信息等。</li>
+</ul>
+<p>Kepler主任务持续约4年，按Q0到Q17分成17个约90天的季度。不是所有恒星都有完整18段，因此一颗恒星通常对应约14到18个long-cadence FITS。</p>
+<p>所以“10颗恒星发现170个FITS”的含义大致是：</p>
+<pre><code class="language-text">10颗恒星 x 平均17个季度文件 = 约170个FITS
+</code></pre>
+<p>这不是170张分类图片，也不是170颗恒星。程序要把属于同一KIC的季度文件按时间拼接，才得到这颗恒星约4年的完整光变历史。</p>
+<h3 id="section-4">2.2 KIC是什么<a class="heading-anchor" href="#section-4" aria-label="链接到本节">#</a></h3>
+<p>KIC是Kepler Input Catalog编号，可以把它理解成Kepler观测目标的“恒星身份证号”。例如 <code>KIC 003120355</code> 表示一颗特定恒星。</p>
+<p>同一个KIC可能存在多个周期不同的凌星信号。例如一颗多行星系统中，不同行星产生不同周期的亮度下降，因此同一颗恒星可以产生多个TCE。</p>
+<h3 id="section-5">2.3 TCE是什么<a class="heading-anchor" href="#section-5" aria-label="链接到本节">#</a></h3>
+<p>TCE是 Threshold Crossing Event，即“超过检测阈值的事件”。Kepler搜索管线先在光变曲线中寻找重复的亮度下降。当一个周期性信号达到检测条件时，就生成一条TCE记录。</p>
+<p>TCE不是一份新的光变文件，而是一组描述“如何在原始光变中定位这个事件”的参数，主要包括：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>含义</th>
+<th>在预处理中的作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>kepid</code></td>
+<td>恒星KIC编号</td>
+<td>找到该恒星的全部FITS</td>
+</tr>
+<tr>
+<td><code>tce_plnt_num</code></td>
+<td>该恒星上的事件序号</td>
+<td>区分同一恒星的多个TCE</td>
+</tr>
+<tr>
+<td><code>tce_period</code></td>
+<td>周期，单位天</td>
+<td>决定按多长周期折叠光变</td>
+</tr>
+<tr>
+<td><code>tce_time0bk</code></td>
+<td>凌星中心历元</td>
+<td>决定把哪个时刻对齐到相位0</td>
+</tr>
+<tr>
+<td><code>tce_duration</code></td>
+<td>事件持续时间，单位小时</td>
+<td>决定local视图放大多宽</td>
+</tr>
+<tr>
+<td>MES等</td>
+<td>多事件统计显著性</td>
+<td>描述信号强弱，不直接替代光变输入</td>
+</tr>
+</tbody></table></div>
+<p>FITS提供“亮度随时间怎么变化”，TCE提供“用什么周期、中心时刻和持续时间去观察这段变化”。两者缺一不可。</p>
+<h3 id="section-6">2.4 TCE、KOI和确认行星不是同一个概念<a class="heading-anchor" href="#section-6" aria-label="链接到本节">#</a></h3>
+<p>可以把它们看成逐级筛选：</p>
+<pre><code class="language-text">原始恒星光变
+  -&gt; 管线检测到周期信号：TCE
+  -&gt; 通过进一步审查、值得跟踪：KOI
+  -&gt; 被判为行星候选体：Planet Candidate
+  -&gt; 经过额外证据确认：Confirmed Planet
+</code></pre>
+<p>TCE只是“机器检测到一个值得检查的周期事件”，并不自动等于行星。星斑、食双星、背景污染、宇宙线、滚动带噪声和数据处理伪影都可能生成TCE。</p>
+<h2 id="section-7">3. 为什么要先去趋势和相位折叠<a class="heading-anchor" href="#section-7" aria-label="链接到本节">#</a></h2>
+<p>原始光变中，行星凌星只是很短、很浅的下降。与此同时，恒星自身会缓慢变亮变暗，仪器也会引入长期趋势。</p>
+<p>今天的复现按照Google AstroNet的思路处理：</p>
+<ol>
+<li>读取同一KIC的全部季度FITS。</li>
+<li>删除时间或亮度为非有限值的采样点。</li>
+<li>在大于0.75天的观测间隙处分段。</li>
+<li>对每段尝试多种B样条断点间距，用BIC选择低频趋势。</li>
+<li>用原亮度除以样条趋势，得到近似平坦的归一化光变。</li>
+<li>使用TCE的周期和历元进行相位折叠。</li>
+<li>生成global 2001点和local 201点两个固定长度向量。</li>
+</ol>
+<p>所谓相位折叠，就是把许多个轨道周期叠在一起。假设周期为10天，Kepler观测了1000天，那么约100次可能的凌星会对齐到相位0附近。单次很弱的下降经过对齐后会更清楚。</p>
+<p>相位时间可写成：</p>
+<pre><code class="language-text">folded_time = ((time - epoch + period/2) mod period) - period/2
+</code></pre>
+<p>折叠结果位于 <code>[-period/2, period/2)</code>，预测凌星中心位于0。</p>
+<h2 id="section-8">4. AstroNet的输入到底是什么<a class="heading-anchor" href="#section-8" aria-label="链接到本节">#</a></h2>
+<p>AstroNet不直接把107,364个FITS文件逐个塞进网络。FITS经过拼接、去趋势、折叠和分箱后，每个TCE才变成一组固定长度输入。</p>
+<h3 id="section-9">4.1 global view：2001点<a class="heading-anchor" href="#section-9" aria-label="链接到本节">#</a></h3>
+<p>global视图覆盖完整轨道周期，从 <code>-period/2</code> 到 <code>+period/2</code>。它让模型看到：</p>
+<ul>
+<li>中心主凌星以外是否还有次级食。</li>
+<li>轨道其他相位是否存在异常下降。</li>
+<li>整圈形状是否存在双星或恒星活动特征。</li>
+<li>主事件相对完整周期的宽度和对称性。</li>
+</ul>
+<p>官方配置使用2001个位置，分箱宽度为 <code>period / 2001</code>。</p>
+<h3 id="section-10">4.2 local view：201点<a class="heading-anchor" href="#section-10" aria-label="链接到本节">#</a></h3>
+<p>local视图只观察中心凌星附近，范围约为中心左右各4个TCE持续时间。它放大：</p>
+<ul>
+<li>凌星底部是平底还是V形。</li>
+<li>入凌和出凌是否对称。</li>
+<li>事件宽度是否合理。</li>
+<li>中心附近是否有尖峰、孤立坏点或不稳定噪声。</li>
+</ul>
+<p>local视图有201个位置，官方分箱宽度为 <code>0.16 x duration</code>。</p>
+<h3 id="section-11">4.3 为什么要同时使用两个视图<a class="heading-anchor" href="#section-11" aria-label="链接到本节">#</a></h3>
+<p>只看global，单个凌星在2001点里可能过窄；只看local，又看不到轨道另一侧的次级食。因此双视图类似于医生同时看“全身片”和“局部放大片”。</p>
+<p>两个视图都被归一化为中位数约0、最深点约-1。这样模型更关注形状，而不是仅仅记住绝对亮度尺度。</p>
+<h2 id="section-12">5. 图像CNN与1D-CNN有什么区别<a class="heading-anchor" href="#section-12" aria-label="链接到本节">#</a></h2>
+<h3 id="section-13">5.1 图像中的2D卷积<a class="heading-anchor" href="#section-13" aria-label="链接到本节">#</a></h3>
+<p>普通灰度图像可以表示为：</p>
+<pre><code class="language-text">[通道, 高度, 宽度]
+</code></pre>
+<p>常见的 <code>3 x 3</code> 卷积核同时沿上下和左右两个方向滑动。它一次查看相邻9个像素，可以逐层学出边缘、角点、纹理和物体形状。</p>
+<h3 id="section-14">5.2 光变曲线中的1D卷积<a class="heading-anchor" href="#section-14" aria-label="链接到本节">#</a></h3>
+<p>AstroNet输入是一条按相位排列的数值序列：</p>
+<pre><code class="language-text">[通道, 序列长度]
+</code></pre>
+<p>这里没有“上下”和“左右”两个空间方向，只有时间或相位这一个顺序方向。长度5的1D卷积核每次查看连续5个位置，然后沿序列向前滑动。</p>
+<figure><img src="../assets/astronet/02_1d_vs_2d_convolution.png" alt="图像2D卷积与光变1D卷积" loading="lazy"><figcaption>图像2D卷积与光变1D卷积</figcaption></figure>
+<p>对一个输出通道，可以把计算简化理解为：</p>
+<pre><code class="language-text">output[i] = bias
+          + w[0] * input[i-2]
+          + w[1] * input[i-1]
+          + w[2] * input[i]
+          + w[3] * input[i+1]
+          + w[4] * input[i+2]
+</code></pre>
+<p>真实网络同时有多个输入通道和输出通道，因此还要对通道求和。训练会自动调整这些权重，让某些卷积核对下降沿敏感、某些对V形敏感、某些对尖锐孤立噪声敏感。</p>
+<h3 id="section-15">5.3 二者的共同点<a class="heading-anchor" href="#section-15" aria-label="链接到本节">#</a></h3>
+<ul>
+<li>都使用局部连接：每个神经元只看附近一小段。</li>
+<li>都使用权重共享：同一卷积核在不同位置复用。</li>
+<li>都可以通过堆叠卷积层扩大感受野。</li>
+<li>都常用ReLU引入非线性、用池化压缩长度并提高小位移鲁棒性。</li>
+</ul>
+<h3 id="section-16">5.4 为什么1D-CNN适合相位折叠光变<a class="heading-anchor" href="#section-16" aria-label="链接到本节">#</a></h3>
+<p>凌星、食双星和仪器伪影都表现为局部形状。1D-CNN不需要人工写出“V形程度”“下降沿斜率”等全部规则，而是可以从标注样本中学习有用的局部模式。</p>
+<h2 id="section-17">6. AstroNet双分支网络逐层拆解<a class="heading-anchor" href="#section-17" aria-label="链接到本节">#</a></h2>
+<figure><img src="../assets/astronet/03_astronet_architecture.png" alt="AstroNet双分支1D-CNN架构" loading="lazy"><figcaption>AstroNet双分支1D-CNN架构</figcaption></figure>
+<h3 id="section-18">6.1 教科书式逐层展开图应该怎样读<a class="heading-anchor" href="#section-18" aria-label="链接到本节">#</a></h3>
+<p>下面这张图把实际运行的PyTorch网络从左到右完全展开。图中的尺寸统一写成“通道数 x 序列长度”，不包含batch维。例如，global输入 <code>1 x 2001</code> 表示一条样本有1个输入通道、2001个相位格点；训练时若batch size为64，送入网络的完整张量形状就是 <code>[64, 1, 2001]</code>。</p>
+<figure><img src="../assets/astronet/08_astronet_layer_by_layer.png" alt="AstroNet逐层网络架构、张量尺寸与1D卷积核示意" loading="lazy"><figcaption>AstroNet逐层网络架构、张量尺寸与1D卷积核示意</figcaption></figure>
+<p>读这张图时，可以抓住四条线索：</p>
+<ol>
+<li><strong>从左向右是数据流。</strong> 蓝色global分支看完整相位周期，橙色local分支放大中心凌星；两者并行提取特征，之后才展平、拼接。</li>
+<li><strong>序列长度逐渐缩短。</strong> global从2001点缩到59个位置，local从201点缩到46个位置，主要是MaxPool造成的。</li>
+<li><strong>通道数逐渐增加。</strong> 通道可以理解为网络学习出来的“特征探测器种类”。早期通道可能响应下降沿、上升沿或尖峰，后期通道会组合出V形、U形、次级食等更复杂模式。</li>
+<li><strong>最右边才做最终分类。</strong> 两个分支合计得到16,576个数，经过4层512维全连接层，输出一个logit，再由sigmoid转换成0到1的AstroNet分数。</li>
+</ol>
+<h3 id="section-19">6.2 1D卷积核究竟是什么<a class="heading-anchor" href="#section-19" aria-label="链接到本节">#</a></h3>
+<p>传统图像CNN常见的 <code>3 x 3</code> 卷积核会同时沿图像的高度和宽度滑动。AstroNet处理的不是二维照片，而是一条按相位排列的光变序列，所以卷积核只沿一个方向滑动。本项目的 <code>kernel_size=5</code> 表示每次查看连续5个相位格点，而不是 <code>5 x 5</code> 的方块。</p>
+<p>对第一层的某一个卷积通道，可以把一个位置的计算简写为：</p>
+<pre><code class="language-text">y(t) = b + w(-2)x(t-2) + w(-1)x(t-1) + w(0)x(t)
+           + w(1)x(t+1) + w(2)x(t+2)
+</code></pre>
+<p>这里的5个权重和一个偏置不是人工设定的，而是从训练数据中学习的。同一组权重会在2001点或201点的所有位置重复使用，这叫<strong>权重共享</strong>。因此，一个学会识别“凌星下降沿”的卷积核，无论下降沿落在序列的哪个位置，都可以产生响应。</p>
+<p>严格地说，第一层以后每个位置不再只有一个亮度值，而是有许多通道。某个输出通道会同时读取所有输入通道在相邻5个位置的数值，再进行加权求和。网络越深，它看到的就越不是单个亮度点，而是前面各层已经提取出的形状组合。</p>
+<p>卷积块中各操作的作用是：</p>
+<ul>
+<li><strong>第一层Conv1D：</strong> 从相邻点学习局部变化，例如下降沿、上升沿、尖峰和平坦区域。</li>
+<li><strong>ReLU：</strong> 把负响应截为0，保留被当前特征探测器激活的部分，并为网络引入非线性。</li>
+<li><strong>第二层Conv1D：</strong> 把第一层的简单响应继续组合，例如形成V形、U形、非对称凹陷或短时伪影。</li>
+<li><strong>MaxPool1D：</strong> 压缩序列长度，让后续神经元覆盖更大的原始范围，并降低对一两个相位格偏移的敏感程度。</li>
+</ul>
+<p>这也解释了网络中“长度变短、通道变多”的总体趋势：位置分辨率逐步变粗，但可表示的特征类型逐步丰富。</p>
+<h3 id="section-20">6.3 一个卷积块是什么<a class="heading-anchor" href="#section-20" aria-label="链接到本节">#</a></h3>
+<p>本项目严格按Google官方配置实现，每个卷积块包含：</p>
+<pre><code class="language-text">Conv1D(kernel_size=5)
+-&gt; ReLU
+-&gt; Conv1D(kernel_size=5)
+-&gt; ReLU
+-&gt; MaxPool1D
+</code></pre>
+<p>卷积使用same padding，所以卷积本身保持序列长度；池化使用valid方式，负责缩短序列。</p>
+<h3 id="section-21">6.4 global分支<a class="heading-anchor" href="#section-21" aria-label="链接到本节">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th align="right">通道数 x 长度</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>输入</td>
+<td align="right">1 x 2001</td>
+<td>完整轨道周期</td>
+</tr>
+<tr>
+<td>Block 1</td>
+<td align="right">16 x 999</td>
+<td>两层卷积，窗口5，池化5/步长2</td>
+</tr>
+<tr>
+<td>Block 2</td>
+<td align="right">32 x 498</td>
+<td>通道翻倍</td>
+</tr>
+<tr>
+<td>Block 3</td>
+<td align="right">64 x 247</td>
+<td>感受野继续扩大</td>
+</tr>
+<tr>
+<td>Block 4</td>
+<td align="right">128 x 122</td>
+<td>提取更高层组合模式</td>
+</tr>
+<tr>
+<td>Block 5</td>
+<td align="right">256 x 59</td>
+<td>最终global特征图</td>
+</tr>
+<tr>
+<td>展平</td>
+<td align="right">15,104</td>
+<td><code>256 x 59</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="section-22">6.5 local分支<a class="heading-anchor" href="#section-22" aria-label="链接到本节">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th align="right">通道数 x 长度</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>输入</td>
+<td align="right">1 x 201</td>
+<td>中心凌星放大图</td>
+</tr>
+<tr>
+<td>Block 1</td>
+<td align="right">16 x 98</td>
+<td>两层卷积，池化7/步长2</td>
+</tr>
+<tr>
+<td>Block 2</td>
+<td align="right">32 x 46</td>
+<td>第二组局部特征</td>
+</tr>
+<tr>
+<td>展平</td>
+<td align="right">1,472</td>
+<td><code>32 x 46</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="section-23">6.6 拼接与全连接分类器<a class="heading-anchor" href="#section-23" aria-label="链接到本节">#</a></h3>
+<pre><code class="language-text">global展平：15,104
+local展平：  1,472
+拼接总计： 16,576
+
+16,576 -&gt; 512 -&gt; 512 -&gt; 512 -&gt; 512 -&gt; 1 logit
+</code></pre>
+<p>最后一个logit经过sigmoid后转成0到1的AstroNet分数。训练时使用 <code>BCEWithLogitsLoss</code>，它把sigmoid和二元交叉熵合并，数值更稳定。</p>
+<p>模型可训练参数总数是 <strong>9,940,193</strong>。float32纯权重约40 MB；使用Adam训练时还要保存梯度与一阶、二阶动量，因此训练检查点和显存占用会更大，但对单张24 GB RTX 3090仍然非常小。</p>
+<h3 id="section-24">6.7 为什么没有直接照搬NASA FDL PyTorch代码<a class="heading-anchor" href="#section-24" aria-label="链接到本节">#</a></h3>
+<p>网上已有NASA Frontier Development Lab的PyTorch翻译版，可作为重要参考。但逐层核对发现，其公开 <code>astronet.py</code>：</p>
+<ul>
+<li>只实现了3层512维隐藏全连接层，而Google官方配置要求4层。</li>
+<li>有一处卷积后缺少ReLU。</li>
+</ul>
+<p>所以本项目不是盲目复制第三方代码，而是以Google TensorFlow配置为最高标准，参考FDL实现并完成现代PyTorch校正。</p>
+<h2 id="section-25">7. MaxPool在一维网络里做什么<a class="heading-anchor" href="#section-25" aria-label="链接到本节">#</a></h2>
+<p><code>MaxPool1D(kernel=5, stride=2)</code> 会在连续5个位置中保留最大激活，然后向前移动2格。这里保留的不是原始亮度最大值，而是卷积特征的最大响应。</p>
+<p>它有三个作用：</p>
+<ol>
+<li>缩短序列，降低后续计算量。</li>
+<li>扩大后层神经元能看到的原始范围。</li>
+<li>让特征对很小的相位偏移不那么敏感。</li>
+</ol>
+<p>池化也会损失精细位置，所以local分支只有2个卷积块，避免把201点的凌星细节压缩得过度；global分支有5个块，用来整合完整周期上的大范围信息。</p>
+<h2 id="section-26">8. train、validation、test如何划分<a class="heading-anchor" href="#section-26" aria-label="链接到本节">#</a></h2>
+<figure><img src="../assets/astronet/04_grouped_data_split.png" alt="按KIC分组的数据划分" loading="lazy"><figcaption>按KIC分组的数据划分</figcaption></figure>
+<h3 id="section-27">8.1 train训练集<a class="heading-anchor" href="#section-27" aria-label="链接到本节">#</a></h3>
+<p>每一批样本经过网络得到logit，与标签计算二元交叉熵。PyTorch反向传播梯度，Adam优化器更新9,940,193个参数。</p>
+<p>今天保留了原论文的数据增强：训练时随机把一部分global和local序列左右翻转。一个对称或近似对称的凌星在相位方向翻转后仍应保持类别，这可以降低模型对偶然方向细节的依赖。</p>
+<h3 id="section-28">8.2 validation验证集<a class="heading-anchor" href="#section-28" aria-label="链接到本节">#</a></h3>
+<p>验证集不更新权重。每轮训练后在验证集计算损失、PR-AUC等指标，用它选择“最佳轮次”的模型检查点。</p>
+<p>不能根据test集反复选轮次，否则test集也参与了模型设计，最终数字会偏乐观。</p>
+<h3 id="section-29">8.3 test测试集<a class="heading-anchor" href="#section-29" aria-label="链接到本节">#</a></h3>
+<p>测试集应模拟模型第一次看到的新恒星。模型结构、超参数和最佳轮次都确定后，再在test集计算准确率、召回率、精确率、F1、ROC-AUC和PR-AUC。</p>
+<h3 id="section-30">8.4 为什么不是随机按TCE逐行切分<a class="heading-anchor" href="#section-30" aria-label="链接到本节">#</a></h3>
+<p>同一KIC的多个TCE共享相同FITS、相同恒星活动和大量相同仪器噪声。如果把一个TCE放入train、另一个放入test，模型可能识别的是这颗恒星，而不是行星凌星。</p>
+<p>因此本项目采用5折分组：fold 0作为test，fold 1作为validation，fold 2到4作为train，并使用标签分层尽量保持正负比例。</p>
+<h2 id="section-31">9. 标签从哪里来<a class="heading-anchor" href="#section-31" aria-label="链接到本节">#</a></h2>
+<p>今天的监督标签使用DR25 KOI表中的 <code>koi_pdisposition</code>：</p>
+<pre><code class="language-text">CANDIDATE      -&gt; 1
+FALSE POSITIVE -&gt; 0
+</code></pre>
+<p>DR25共有34,032条TCE，但只有8,054条对应KOI正负标签：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>标签</th>
+<th align="right">数量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CANDIDATE</td>
+<td align="right">4,034</td>
+</tr>
+<tr>
+<td>FALSE POSITIVE</td>
+<td align="right">4,020</td>
+</tr>
+<tr>
+<td>合计</td>
+<td align="right">8,054</td>
+</tr>
+</tbody></table></div>
+<p>这些有标签TCE涉及6,923颗唯一恒星。未标注的25,978条TCE不会在当前有监督基线中直接作为普通训练标签；它们以后可用于无监督、半监督或真正的全量搜索研究。</p>
+<h2 id="section-32">10. Robovetter是什么算法<a class="heading-anchor" href="#section-32" aria-label="链接到本节">#</a></h2>
+<p>Robovetter不是卷积神经网络，也不是端到端深度学习。它是Kepler团队把人工审查经验编码成的一组指标、阈值和简单决策树。</p>
+<figure><img src="../assets/astronet/05_robovetter_logic.png" alt="Robovetter的规则化判定流程" loading="lazy"><figcaption>Robovetter的规则化判定流程</figcaption></figure>
+<p>主要检查可归纳为四类：</p>
+<ol>
+<li><strong>Not Transit-Like</strong>：事件是否根本不像天体凌星，例如孤立坏点、系统噪声或不稳定的单次下降。</li>
+<li><strong>Stellar Eclipse</strong>：是否存在次级食、椭球变化、过深或明显V形的食，提示食双星。</li>
+<li><strong>Centroid Offset</strong>：差分图像质心是否偏向邻近恒星，提示信号并非来自目标星。</li>
+<li><strong>Ephemeris Match</strong>：周期和历元是否与其他目标或已知污染源匹配，提示串扰或背景污染。</li>
+</ol>
+<p>Robovetter把测试结果记录为major和minor flags，然后统一判为CANDIDATE或FALSE POSITIVE。</p>
+<h3 id="section-33">10.1 koi_score是什么意思<a class="heading-anchor" href="#section-33" aria-label="链接到本节">#</a></h3>
+<p><code>koi_score</code>不是简单的“Robovetter认为是行星的物理概率”。DR25会根据指标在周期和MES上的散布随机扰动各项Robovetter指标，并重新判定10,000次。最终被判为CANDIDATE的次数比例就是score。</p>
+<p>例如score为0.92，可以理解为指标扰动后10,000次判定中约92%仍通过候选规则。它更接近“判定对指标扰动的稳定度”。</p>
+<h3 id="section-34">10.2 AstroNet与Robovetter的根本区别<a class="heading-anchor" href="#section-34" aria-label="链接到本节">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>对比项</th>
+<th>AstroNet</th>
+<th>Robovetter</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>核心方法</td>
+<td>可训练的1D-CNN</td>
+<td>人工设计指标、阈值和决策树</td>
+</tr>
+<tr>
+<td>主要输入</td>
+<td>global/local光变形状</td>
+<td>DV指标、光变指标、质心、周期匹配等</td>
+</tr>
+<tr>
+<td>特征来源</td>
+<td>从数据学习</td>
+<td>天文学家显式设计</td>
+</tr>
+<tr>
+<td>输出</td>
+<td>神经网络logit和sigmoid分数</td>
+<td>PC/FP、flags、扰动稳定度score</td>
+</tr>
+<tr>
+<td>优点</td>
+<td>能学习难以手写的形状组合</td>
+<td>可解释，能利用质心和污染证据</td>
+</tr>
+<tr>
+<td>风险</td>
+<td>可能学到数据偏差，解释较难</td>
+<td>阈值附近不连续，规则维护复杂</td>
+</tr>
+</tbody></table></div>
+<p>Robovetter能使用质心和星场污染等信息，而当前经典AstroNet只看两个光变视图。因此AstroNet不应被描述成对Robovetter所有能力的完整替代。</p>
+<h2 id="section-35">11. 今天具体做了什么<a class="heading-anchor" href="#section-35" aria-label="链接到本节">#</a></h2>
+<h3 id="section-36">11.1 官方与参考代码核对<a class="heading-anchor" href="#section-36" aria-label="链接到本节">#</a></h3>
+<ul>
+<li>浅克隆Google Research官方 <code>exoplanet-ml</code>，固定提交用于结构和预处理核对。</li>
+<li>浅克隆NASA FDL AstroNet-PyTorch，用于交叉参考。</li>
+<li>按Google配置重建双分支网络。</li>
+<li>检查每层输出尺寸和总参数数。</li>
+</ul>
+<p>一致性检查结果：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>检查项</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>local隐藏输出</td>
+<td><code>[2, 32, 46]</code></td>
+</tr>
+<tr>
+<td>global隐藏输出</td>
+<td><code>[2, 256, 59]</code></td>
+</tr>
+<tr>
+<td>最终输出</td>
+<td><code>[2]</code></td>
+</tr>
+<tr>
+<td>参数数</td>
+<td>9,940,193</td>
+</tr>
+<tr>
+<td>local归一化</td>
+<td>median=0，minimum=-1</td>
+</tr>
+<tr>
+<td>global归一化</td>
+<td>median=0，minimum=-1</td>
+</tr>
+<tr>
+<td>PyTorch</td>
+<td>2.12.1+cu126</td>
+</tr>
+<tr>
+<td>GPU</td>
+<td>RTX 3090，训练进程只可见1张</td>
+</tr>
+</tbody></table></div>
+<h3 id="section-37">11.2 pilot100真实FITS闭环<a class="heading-anchor" href="#section-37" aria-label="链接到本节">#</a></h3>
+<ul>
+<li>100颗恒星全部完成预处理。</li>
+<li>生成110个有KOI标签的TCE视图。</li>
+<li>train/validation/test为66/22/22。</li>
+<li>KIC泄漏为0。</li>
+<li>其中1颗恒星触发2018年Google spline与新版pydl的数组兼容异常。</li>
+<li>兼容回退仍使用官方样条函数，只把BIC多断点搜索改为固定1.5天断点，并在元数据中明确记录，避免静默改变算法。</li>
+</ul>
+<h3 id="section-38">11.3 单GPU五轮冒烟训练<a class="heading-anchor" href="#section-38" aria-label="链接到本节">#</a></h3>
+<p>本次只用于验证数据、网络、反向传播、检查点和评价代码能够闭环。66个训练样本远不足以训练近千万参数模型。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>方法</th>
+<th align="right">准确率</th>
+<th align="right">精确率</th>
+<th align="right">召回率</th>
+<th align="right">F1</th>
+<th align="right">ROC-AUC</th>
+<th align="right">PR-AUC</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>AstroNet-PyTorch</td>
+<td align="right">54.55%</td>
+<td align="right">54.55%</td>
+<td align="right">100.00%</td>
+<td align="right">70.59%</td>
+<td align="right">0.7167</td>
+<td align="right">0.7972</td>
+</tr>
+<tr>
+<td>DR25 Robovetter</td>
+<td align="right">90.91%</td>
+<td align="right">100.00%</td>
+<td align="right">83.33%</td>
+<td align="right">90.91%</td>
+<td align="right">1.0000</td>
+<td align="right">1.0000</td>
+</tr>
+</tbody></table></div>
+<figure><img src="../assets/astronet/06_astronet_vs_robovetter.png" alt="pilot100上AstroNet与Robovetter的流程对照" loading="lazy"><figcaption>pilot100上AstroNet与Robovetter的流程对照</figcaption></figure>
+<p>AstroNet在0.5阈值下把22个测试样本全部判为正类，所以召回率达到100%，但10个负类全部成为假阳性。这是典型的小样本阈值塌缩，不能解读为“模型找回了所有行星”。</p>
+<h3 id="section-39">11.4 从100颗恒星扩展到1000颗<a class="heading-anchor" href="#section-39" aria-label="链接到本节">#</a></h3>
+<p>pilot100暴露的核心问题不是网络无法运行，而是近千万参数面对66个训练样本时几乎没有机会学到稳定的负类特征。因此M2保持网络、预处理和单卡设置不变，只把数据规模扩大约10倍，尽量把“数据量变化”与其他实验变量分开。</p>
+<p>M2的固定范围为：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th align="right">数量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>唯一KIC恒星</td>
+<td align="right">1,000</td>
+</tr>
+<tr>
+<td>纯CANDIDATE宿主</td>
+<td align="right">500</td>
+</tr>
+<tr>
+<td>纯FALSE POSITIVE宿主</td>
+<td align="right">500</td>
+</tr>
+<tr>
+<td>带标签TCE</td>
+<td align="right">1,164</td>
+</tr>
+<tr>
+<td>long-cadence FITS</td>
+<td align="right">15,569</td>
+</tr>
+<tr>
+<td>FITS实际数据量</td>
+<td align="right">6,757,767,360 bytes，约6.29 GiB</td>
+</tr>
+<tr>
+<td>预处理失败</td>
+<td align="right">0</td>
+</tr>
+<tr>
+<td>因同一KIC含正负标签而排除的混合宿主</td>
+<td align="right">97</td>
+</tr>
+</tbody></table></div>
+<p>CPU首先读取FITS、清理质量标记、执行官方样条去趋势、相位折叠并生成2001点global与201点local视图。视图构建每5颗恒星保存一次断点。全部1164个固定长度样本完成后，GPU 0才开始训练；这也是预处理阶段两张3090看起来空闲的原因。</p>
+<p>训练仍使用Adam、学习率 <code>2e-4</code>、batch size 64和随机种子42，共20轮。每轮后只查看validation指标，并按照validation PR-AUC保存最佳检查点；test集在模型选择完成后才用于最终评价。</p>
+<h3 id="section-40">11.5 M2测试结果：模型不再全部判正<a class="heading-anchor" href="#section-40" aria-label="链接到本节">#</a></h3>
+<p>前8轮validation准确率仍约为56.65%，模型基本延续pilot100的“全部判为候选体”倾向。第9至12轮开始出现转折：训练损失继续下降，模型逐渐学会把假阳性排除出去。第19轮得到最高validation PR-AUC 0.9389，因此成为最终检查点。</p>
+<p>在从未参与训练和选模的233个test样本上，结果为：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>方法</th>
+<th align="right">准确率</th>
+<th align="right">精确率</th>
+<th align="right">召回率</th>
+<th align="right">F1</th>
+<th align="right">ROC-AUC</th>
+<th align="right">PR-AUC</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>AstroNet-PyTorch M2</td>
+<td align="right">84.12%</td>
+<td align="right">89.26%</td>
+<td align="right">81.82%</td>
+<td align="right">85.38%</td>
+<td align="right">0.9185</td>
+<td align="right">0.9316</td>
+</tr>
+<tr>
+<td>DR25 Robovetter</td>
+<td align="right">97.00%</td>
+<td align="right">100.00%</td>
+<td align="right">94.70%</td>
+<td align="right">97.28%</td>
+<td align="right">0.9975</td>
+<td align="right">0.9982</td>
+</tr>
+</tbody></table></div>
+<figure><img src="../assets/astronet/07_m2_1000_astronet_vs_robovetter.png" alt="M2的ROC、precision-recall曲线和AstroNet混淆矩阵" loading="lazy"><figcaption>M2的ROC、precision-recall曲线和AstroNet混淆矩阵</figcaption></figure>
+<p>混淆矩阵可以翻译成四句话：</p>
+<ul>
+<li>88个假阳性被正确排除，是真负类TN。</li>
+<li>13个假阳性被误报为候选体，是FP。</li>
+<li>24个候选体被漏掉，是FN。</li>
+<li>108个候选体被正确找回，是TP。</li>
+</ul>
+<p>这说明M2已经不再依靠“全部判正”取得高召回率，而是同时获得89.26%的精确率和81.82%的召回率。ROC-AUC 0.9185与PR-AUC 0.9316还说明，模型分数对两类样本已经具有较强的排序能力。</p>
+<p>从54.55%到84.12%是明显进步，但两次实验的test样本不是同一批，不能把29.57个百分点全部解释成“数据扩大10倍的纯因果收益”。更严谨的规模实验应预先固定同一test集，再分别用100、250、500、1000颗训练恒星绘制学习曲线。</p>
+<h3 id="section-41">11.6 与NASA当前公共目录交叉核对：121个模型候选中有79个已确认行星<a class="heading-anchor" href="#section-41" aria-label="链接到本节">#</a></h3>
+<p>前面的准确率是模型相对于DR25历史标签的分类成绩，并不直接等于“发现了多少颗行星”。为回答更直观的问题，我们又在2026-07-14把M2的全部1164个TCE与NASA Exoplanet Archive当前KOI目录及Planetary Systems Composite Parameters表逐项交叉核对。1164个TCE全部成功匹配，没有无法核对的条目。</p>
+<p>先看整个1000颗宿主恒星样本的当前状态：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>当前NASA状态</th>
+<th align="right">宿主恒星数</th>
+<th align="right">TCE数</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>至少有一颗已确认行星</td>
+<td align="right">313</td>
+<td align="right">427</td>
+</tr>
+<tr>
+<td>只有尚未确认的候选体</td>
+<td align="right">182</td>
+<td align="right">228</td>
+</tr>
+<tr>
+<td>只有当前假阳性</td>
+<td align="right">505</td>
+<td align="right">509</td>
+</tr>
+<tr>
+<td>合计</td>
+<td align="right">1,000</td>
+<td align="right">1,164</td>
+</tr>
+</tbody></table></div>
+<p>再只看封存的233个test TCE。AstroNet以0.5为阈值判出了121个“值得继续检查”的模型候选；根据NASA当前目录，这121个信号由三部分组成：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>NASA当前状态</th>
+<th align="right">数量</th>
+<th align="right">占121个模型候选的比例</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>已确认行星</td>
+<td align="right">79</td>
+<td align="right">65.29%</td>
+</tr>
+<tr>
+<td>仍是候选体</td>
+<td align="right">33</td>
+<td align="right">27.27%</td>
+</tr>
+<tr>
+<td>当前假阳性</td>
+<td align="right">9</td>
+<td align="right">7.44%</td>
+</tr>
+<tr>
+<td>合计</td>
+<td align="right">121</td>
+<td align="right">100.00%</td>
+</tr>
+</tbody></table></div>
+<p>所以正确表述是：<strong>模型判出的121个测试候选中，79个现在是已确认行星</strong>，而不是“121个都是行星”，也不是“79颗宿主恒星”。这79个行星信号分布在54颗宿主恒星上；多行星系统的一颗恒星会贡献多个TCE。test集中一共有85个当前已确认行星信号，模型找回79个、漏掉6个，对当前确认行星的信号级召回率为 <code>79 / 85 = 92.94%</code>。59颗拥有确认行星的test宿主中，54颗至少有一个信号被模型判正。</p>
+<figure><img src="../assets/astronet/09_m2_nasa_crossmatch_summary.png" alt="M2样本、TCE与121个模型候选的NASA当前状态" loading="lazy"><figcaption>M2样本、TCE与121个模型候选的NASA当前状态</figcaption></figure>
+<p>一个很有代表性的例子是著名的Kepler-11系统（KIC 6541920）：test集中包含Kepler-11 b至g六颗行星，模型六个都判为正，分数约为0.870至0.968。整个1000颗恒星样本里还包括Kepler-444、Kepler-238、Kepler-65和Kepler-19等常见于科普或研究文献的系统。不过，这仍是对已知目标的回顾性核对，不代表模型在本轮中首次发现了这些行星。</p>
+<h3 id="section-42">11.7 这79颗已确认行星离地球多远<a class="heading-anchor" href="#section-42" aria-label="链接到本节">#</a></h3>
+<p>距离采用NASA Planetary Systems Composite Parameters表中的 <code>sy_dist</code>，含义是“到这个行星系统的距离”，单位为秒差距pc。这里测量的是宿主恒星系统，不是行星绕恒星运行的轨道半径；同一个多行星系统中的各颗行星因而共享同一距离。本次79个行星条目都有距离值，无缺失。按 <code>1 pc = 3.26156光年</code> 换算：</p>
+<ul>
+<li>最近的是Kepler-1053 b，约151.1 pc，也就是493光年。</li>
+<li>距离中位数约646.3 pc，也就是2,108光年。</li>
+<li>Kepler-11系统约646.3 pc，即2,108光年，恰好接近本组中位数。</li>
+<li>最远的是Kepler-747 b，约3,347.2 pc，也就是10,917光年。</li>
+<li>79个条目中，12个在1,000光年以内，23个在1,000至2,000光年，22个在2,000至3,000光年，14个在3,000至5,000光年，5个在5,000至8,000光年，3个超过或等于8,000光年。</li>
+</ul>
+<figure><img src="../assets/astronet/10_m2_confirmed_distance_summary.png" alt="79个已确认行星的距离分布" loading="lazy"><figcaption>79个已确认行星的距离分布</figcaption></figure>
+<p>这些距离是NASA综合目录在本次查询时给出的近似值。该表为方便统计而汇集不同论文中的参数，同一行的不同字段可能来自不同参考文献，因此适合做本报告这种数量级说明；若要对单个系统做精密研究，还应继续查看该行的误差上下限和原始文献。完整79项明细见第17节。</p>
+<h2 id="section-43">12. 如何读准确率、精确率和召回率<a class="heading-anchor" href="#section-43" aria-label="链接到本节">#</a></h2>
+<p>设“候选行星”为正类：</p>
+<ul>
+<li>TP：真实正类且模型判正。</li>
+<li>FP：真实负类但模型判正，也叫假阳性。</li>
+<li>FN：真实正类但模型判负，也叫漏检。</li>
+<li>TN：真实负类且模型判负。</li>
+</ul>
+<pre><code class="language-text">Accuracy  = (TP + TN) / 全部样本
+Precision = TP / (TP + FP)
+Recall    = TP / (TP + FN)
+F1        = 2 x Precision x Recall / (Precision + Recall)
+</code></pre>
+<p>系外行星初筛通常很关心Recall，因为漏掉真实行星后可能再也不会被人工检查。但如果只追求Recall，把所有样本都判为候选体就能得到100% Recall，这显然没有实用价值。因此必须同时看Precision、PR-AUC和最终需要人工复核的候选数量。</p>
+<h2 id="section-44">13. 为什么当前Robovetter比较不是公平决赛<a class="heading-anchor" href="#section-44" aria-label="链接到本节">#</a></h2>
+<p>M1和M2的标签 <code>koi_pdisposition</code> 与Robovetter分数 <code>koi_score</code> 都来自DR25 Robovetter体系。于是Robovetter相当于既参与出题，又参与考试。M2中Robovetter得到97.00%准确率，不能直接解释为它在独立科学真值上必然比AstroNet高12.88个百分点。</p>
+<p>当前比较能够回答：</p>
+<ul>
+<li>评价代码是否正确运行。</li>
+<li>同一测试集上的指标和图是否能生成。</li>
+<li>AstroNet对DR25标签的模仿程度如何。</li>
+</ul>
+<p>它不能严格回答：</p>
+<ul>
+<li>AstroNet是否在真实天体意义上优于Robovetter。</li>
+<li>哪种方法发现新行星的能力更强。</li>
+<li>score能否直接解释为真实行星概率。</li>
+</ul>
+<p>更公平的独立测试集应组合：</p>
+<ul>
+<li>后续得到确认的行星。</li>
+<li>Certified False Positives等人工认证假阳性。</li>
+<li>像素级注入的已知凌星。</li>
+<li>反相和打乱光变产生的已知假警报。</li>
+<li>在数据划分和阈值确定后完全封存的测试集。</li>
+</ul>
+<h2 id="section-45">14. 全量监督数据有多大<a class="heading-anchor" href="#section-45" aria-label="链接到本节">#</a></h2>
+<p>已经对6,923颗有标签恒星逐个读取MAST目录，没有直接用简单乘法估算：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th align="right">结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>有标签TCE</td>
+<td align="right">8,054</td>
+</tr>
+<tr>
+<td>唯一KIC</td>
+<td align="right">6,923</td>
+</tr>
+<tr>
+<td>long-cadence FITS</td>
+<td align="right">107,364</td>
+</tr>
+<tr>
+<td>MAST目录估计</td>
+<td align="right">46,452,401,152 bytes，约43.26 GiB</td>
+</tr>
+<tr>
+<td>舍入安全上界</td>
+<td align="right">46,507,371,520 bytes，约43.31 GiB</td>
+</tr>
+<tr>
+<td>下载硬上限</td>
+<td align="right">200 GiB</td>
+</tr>
+<tr>
+<td>启动前数据盘可用</td>
+<td align="right">约3.2 TiB</td>
+</tr>
+</tbody></table></div>
+<p>下载器具有：</p>
+<ul>
+<li>200 GiB硬上限。</li>
+<li>50 GiB保留空间检查。</li>
+<li>断点续传。</li>
+<li>已有pilot100文件硬链接复用。</li>
+<li>FITS主头校验。</li>
+<li>SHA-256记录。</li>
+<li>失败文件单独记录，不伪装成成功。</li>
+</ul>
+<p>本轮全量下载已经完成首遍执行：107,364个计划文件中有107,353个成功落盘，实际总量46,445,137,920 bytes，约43.25 GiB；其中105,764个为新下载、1,569个复用pilot100硬链接、20个为启动前已有文件。另有11个文件因网络传输中断而失败，已保留精确清单，等待断点重试。M2选择的15,569个FITS缺失数为0，因此这11个失败文件不影响本次1000恒星结果。</p>
+<h2 id="section-46">15. M2之后怎样走向全量正式实验<a class="heading-anchor" href="#section-46" aria-label="链接到本节">#</a></h2>
+<p>M2证明了1000颗恒星规模下，官方预处理、分组切分和单卡训练都能稳定运行。下一阶段按以下顺序扩展：</p>
+<ol>
+<li>重试11个传输失败的FITS，确认107,364个文件全部成功。</li>
+<li>为8,054个有标签TCE批量生成global/local视图。</li>
+<li>统计样条回退率、空分箱率、异常值和类别分布。</li>
+<li>固定按KIC分组的train/validation/test索引并保存版本哈希。</li>
+<li>继续只使用GPU 0训练全量AstroNet基线，保持与M2可比。</li>
+<li>在validation集选择最佳轮次和分类阈值。</li>
+<li>最后一次性计算test集指标。</li>
+<li>与Robovetter在相同TCE上比较，并明确同源标签限制。</li>
+<li>生成混淆矩阵、ROC、PR曲线、分数分布和典型误判光变卡片。</li>
+<li>再引入独立确认集，进行真正有科学意义的比较。</li>
+</ol>
+<h2 id="section-47">16. 常见问题<a class="heading-anchor" href="#section-47" aria-label="链接到本节">#</a></h2>
+<h3 id="section-48">16.1 一颗恒星是否只生成一个训练样本<a class="heading-anchor" href="#section-48" aria-label="链接到本节">#</a></h3>
+<p>不一定。训练样本的基本单位是TCE。一颗恒星若有3个不同周期的TCE，就会共享同一套FITS，但按3组周期、历元、时长分别折叠，生成3组global/local输入。</p>
+<h3 id="section-49">16.2 2001点和201点是不是原始观测点<a class="heading-anchor" href="#section-49" aria-label="链接到本节">#</a></h3>
+<p>不是。它们是相位折叠后通过中位数分箱得到的固定长度表示。一个位置可能聚合许多原始cadence，也可能为空；空分箱由全局中位数填充。</p>
+<h3 id="section-50">16.3 为什么global是奇数2001，local是奇数201<a class="heading-anchor" href="#section-50" aria-label="链接到本节">#</a></h3>
+<p>奇数长度便于把预测凌星中心放在唯一的中央位置。中心左右具有近似对称的采样位置。</p>
+<h3 id="section-51">16.4 双3090为什么只用一张<a class="heading-anchor" href="#section-51" aria-label="链接到本节">#</a></h3>
+<p>AstroNet只有约994万参数，单张3090显存和计算能力足够。双卡数据并行会引入额外的通信、随机性和调试变量。第一版先固定单卡，更容易证明结果可复现；第二张卡以后可以并行跑另一组独立实验。</p>
+<h3 id="section-52">16.5 AstroNet输出高分是否等于发现新行星<a class="heading-anchor" href="#section-52" aria-label="链接到本节">#</a></h3>
+<p>不等于。高分只表示模型认为输入形状类似训练标签中的候选体。新候选仍需检查数据质量、次级食、奇偶凌星、质心偏移、邻星污染、周期匹配和统计验证。</p>
+<h2 id="section-53">17. AstroNet找回的79个当前已确认行星及距离<a class="heading-anchor" href="#section-53" aria-label="链接到本节">#</a></h2>
+<p>下表按距离从近到远排列。每一行是一个已确认行星信号，不是一颗互不重复的恒星；因此Kepler-11、Kepler-235等多行星系统会出现多行。<code>AstroNet分数</code>是本次模型输出，<code>宿主Kp星等</code>是Kepler波段的视星等，数值越小表示Kepler看到的宿主恒星越亮。距离来自NASA公共目录并直接换算为光年；为节省版面，表中不再重复列出秒差距。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th align="right">序号</th>
+<th>已确认行星</th>
+<th align="right">宿主KIC</th>
+<th>KOI</th>
+<th align="right">AstroNet分数</th>
+<th align="right">宿主Kp星等</th>
+<th align="right">约/光年</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="right">1</td>
+<td>Kepler-1053 b</td>
+<td align="right">4056616</td>
+<td>K02013.01</td>
+<td align="right">0.7326</td>
+<td align="right">13.156</td>
+<td align="right">493</td>
+</tr>
+<tr>
+<td align="right">2</td>
+<td>Kepler-205 b</td>
+<td align="right">6425957</td>
+<td>K00663.01</td>
+<td align="right">0.7293</td>
+<td align="right">13.506</td>
+<td align="right">521</td>
+</tr>
+<tr>
+<td align="right">3</td>
+<td>Kepler-205 c</td>
+<td align="right">6425957</td>
+<td>K00663.02</td>
+<td align="right">0.8650</td>
+<td align="right">13.506</td>
+<td align="right">521</td>
+</tr>
+<tr>
+<td align="right">4</td>
+<td>Kepler-249 b</td>
+<td align="right">7907423</td>
+<td>K00899.02</td>
+<td align="right">0.9110</td>
+<td align="right">15.234</td>
+<td align="right">621</td>
+</tr>
+<tr>
+<td align="right">5</td>
+<td>Kepler-249 c</td>
+<td align="right">7907423</td>
+<td>K00899.01</td>
+<td align="right">0.8405</td>
+<td align="right">15.234</td>
+<td align="right">621</td>
+</tr>
+<tr>
+<td align="right">6</td>
+<td>Kepler-249 d</td>
+<td align="right">7907423</td>
+<td>K00899.03</td>
+<td align="right">0.8980</td>
+<td align="right">15.234</td>
+<td align="right">621</td>
+</tr>
+<tr>
+<td align="right">7</td>
+<td>Kepler-19 b</td>
+<td align="right">2571238</td>
+<td>K00084.01</td>
+<td align="right">0.7265</td>
+<td align="right">11.898</td>
+<td align="right">713</td>
+</tr>
+<tr>
+<td align="right">8</td>
+<td>Kepler-449 b</td>
+<td align="right">6528464</td>
+<td>K00270.01</td>
+<td align="right">0.9476</td>
+<td align="right">11.411</td>
+<td align="right">789</td>
+</tr>
+<tr>
+<td align="right">9</td>
+<td>Kepler-449 c</td>
+<td align="right">6528464</td>
+<td>K00270.02</td>
+<td align="right">0.9688</td>
+<td align="right">11.411</td>
+<td align="right">789</td>
+</tr>
+<tr>
+<td align="right">10</td>
+<td>Kepler-1709 b</td>
+<td align="right">7941200</td>
+<td>K00092.01</td>
+<td align="right">0.8390</td>
+<td align="right">11.667</td>
+<td align="right">893</td>
+</tr>
+<tr>
+<td align="right">11</td>
+<td>Kepler-517 b</td>
+<td align="right">5966322</td>
+<td>K00303.01</td>
+<td align="right">0.8898</td>
+<td align="right">12.193</td>
+<td align="right">946</td>
+</tr>
+<tr>
+<td align="right">12</td>
+<td>Kepler-1713 b</td>
+<td align="right">7670943</td>
+<td>K00269.01</td>
+<td align="right">0.9676</td>
+<td align="right">10.927</td>
+<td align="right">963</td>
+</tr>
+<tr>
+<td align="right">13</td>
+<td>Kepler-1026 b</td>
+<td align="right">4813563</td>
+<td>K01959.01</td>
+<td align="right">0.9528</td>
+<td align="right">14.254</td>
+<td align="right">1,146</td>
+</tr>
+<tr>
+<td align="right">14</td>
+<td>Kepler-1009 b</td>
+<td align="right">7094486</td>
+<td>K01907.01</td>
+<td align="right">0.9265</td>
+<td align="right">15.278</td>
+<td align="right">1,158</td>
+</tr>
+<tr>
+<td align="right">15</td>
+<td>Kepler-353 b</td>
+<td align="right">6382217</td>
+<td>K02036.02</td>
+<td align="right">0.6028</td>
+<td align="right">15.773</td>
+<td align="right">1,255</td>
+</tr>
+<tr>
+<td align="right">16</td>
+<td>Kepler-353 c</td>
+<td align="right">6382217</td>
+<td>K02036.01</td>
+<td align="right">0.9130</td>
+<td align="right">15.773</td>
+<td align="right">1,255</td>
+</tr>
+<tr>
+<td align="right">17</td>
+<td>Kepler-83 b</td>
+<td align="right">7870390</td>
+<td>K00898.01</td>
+<td align="right">0.9202</td>
+<td align="right">15.777</td>
+<td align="right">1,306</td>
+</tr>
+<tr>
+<td align="right">18</td>
+<td>Kepler-83 c</td>
+<td align="right">7870390</td>
+<td>K00898.03</td>
+<td align="right">0.9229</td>
+<td align="right">15.777</td>
+<td align="right">1,306</td>
+</tr>
+<tr>
+<td align="right">19</td>
+<td>Kepler-83 d</td>
+<td align="right">7870390</td>
+<td>K00898.02</td>
+<td align="right">0.9130</td>
+<td align="right">15.777</td>
+<td align="right">1,306</td>
+</tr>
+<tr>
+<td align="right">20</td>
+<td>Kepler-235 b</td>
+<td align="right">4139816</td>
+<td>K00812.01</td>
+<td align="right">0.6173</td>
+<td align="right">15.954</td>
+<td align="right">1,396</td>
+</tr>
+<tr>
+<td align="right">21</td>
+<td>Kepler-235 c</td>
+<td align="right">4139816</td>
+<td>K00812.04</td>
+<td align="right">0.6631</td>
+<td align="right">15.954</td>
+<td align="right">1,396</td>
+</tr>
+<tr>
+<td align="right">22</td>
+<td>Kepler-235 d</td>
+<td align="right">4139816</td>
+<td>K00812.02</td>
+<td align="right">0.9336</td>
+<td align="right">15.954</td>
+<td align="right">1,396</td>
+</tr>
+<tr>
+<td align="right">23</td>
+<td>Kepler-235 e</td>
+<td align="right">4139816</td>
+<td>K00812.03</td>
+<td align="right">0.9450</td>
+<td align="right">15.954</td>
+<td align="right">1,396</td>
+</tr>
+<tr>
+<td align="right">24</td>
+<td>Kepler-161 b</td>
+<td align="right">7440748</td>
+<td>K00457.01</td>
+<td align="right">0.6921</td>
+<td align="right">14.196</td>
+<td align="right">1,418</td>
+</tr>
+<tr>
+<td align="right">25</td>
+<td>Kepler-185 b</td>
+<td align="right">8008206</td>
+<td>K00569.02</td>
+<td align="right">0.5900</td>
+<td align="right">14.458</td>
+<td align="right">1,522</td>
+</tr>
+<tr>
+<td align="right">26</td>
+<td>Kepler-185 c</td>
+<td align="right">8008206</td>
+<td>K00569.01</td>
+<td align="right">0.9307</td>
+<td align="right">14.458</td>
+<td align="right">1,522</td>
+</tr>
+<tr>
+<td align="right">27</td>
+<td>Kepler-1048 b</td>
+<td align="right">6665512</td>
+<td>K02005.01</td>
+<td align="right">0.9233</td>
+<td align="right">14.832</td>
+<td align="right">1,813</td>
+</tr>
+<tr>
+<td align="right">28</td>
+<td>Kepler-1406 b</td>
+<td align="right">3852655</td>
+<td>K03002.01</td>
+<td align="right">0.8928</td>
+<td align="right">13.256</td>
+<td align="right">1,867</td>
+</tr>
+<tr>
+<td align="right">29</td>
+<td>Kepler-1470 b</td>
+<td align="right">4736644</td>
+<td>K03330.01</td>
+<td align="right">0.8009</td>
+<td align="right">15.061</td>
+<td align="right">1,926</td>
+</tr>
+<tr>
+<td align="right">30</td>
+<td>Kepler-206 b</td>
+<td align="right">6442340</td>
+<td>K00664.02</td>
+<td align="right">0.7098</td>
+<td align="right">13.484</td>
+<td align="right">1,939</td>
+</tr>
+<tr>
+<td align="right">31</td>
+<td>Kepler-206 c</td>
+<td align="right">6442340</td>
+<td>K00664.01</td>
+<td align="right">0.9728</td>
+<td align="right">13.484</td>
+<td align="right">1,939</td>
+</tr>
+<tr>
+<td align="right">32</td>
+<td>Kepler-206 d</td>
+<td align="right">6442340</td>
+<td>K00664.03</td>
+<td align="right">0.8133</td>
+<td align="right">13.484</td>
+<td align="right">1,939</td>
+</tr>
+<tr>
+<td align="right">33</td>
+<td>Kepler-184 b</td>
+<td align="right">7445445</td>
+<td>K00567.01</td>
+<td align="right">0.9242</td>
+<td align="right">14.338</td>
+<td align="right">1,991</td>
+</tr>
+<tr>
+<td align="right">34</td>
+<td>Kepler-184 c</td>
+<td align="right">7445445</td>
+<td>K00567.02</td>
+<td align="right">0.9466</td>
+<td align="right">14.338</td>
+<td align="right">1,991</td>
+</tr>
+<tr>
+<td align="right">35</td>
+<td>Kepler-184 d</td>
+<td align="right">7445445</td>
+<td>K00567.03</td>
+<td align="right">0.9122</td>
+<td align="right">14.338</td>
+<td align="right">1,991</td>
+</tr>
+<tr>
+<td align="right">36</td>
+<td>Kepler-1335 b</td>
+<td align="right">6586746</td>
+<td>K02747.01</td>
+<td align="right">0.7262</td>
+<td align="right">15.329</td>
+<td align="right">2,028</td>
+</tr>
+<tr>
+<td align="right">37</td>
+<td>Kepler-1601 b</td>
+<td align="right">2831055</td>
+<td>K04400.01</td>
+<td align="right">0.8092</td>
+<td align="right">13.764</td>
+<td align="right">2,102</td>
+</tr>
+<tr>
+<td align="right">38</td>
+<td>Kepler-11 b</td>
+<td align="right">6541920</td>
+<td>K00157.06</td>
+<td align="right">0.8857</td>
+<td align="right">13.709</td>
+<td align="right">2,108</td>
+</tr>
+<tr>
+<td align="right">39</td>
+<td>Kepler-11 c</td>
+<td align="right">6541920</td>
+<td>K00157.01</td>
+<td align="right">0.9342</td>
+<td align="right">13.709</td>
+<td align="right">2,108</td>
+</tr>
+<tr>
+<td align="right">40</td>
+<td>Kepler-11 d</td>
+<td align="right">6541920</td>
+<td>K00157.02</td>
+<td align="right">0.9224</td>
+<td align="right">13.709</td>
+<td align="right">2,108</td>
+</tr>
+<tr>
+<td align="right">41</td>
+<td>Kepler-11 e</td>
+<td align="right">6541920</td>
+<td>K00157.03</td>
+<td align="right">0.8697</td>
+<td align="right">13.709</td>
+<td align="right">2,108</td>
+</tr>
+<tr>
+<td align="right">42</td>
+<td>Kepler-11 f</td>
+<td align="right">6541920</td>
+<td>K00157.04</td>
+<td align="right">0.9361</td>
+<td align="right">13.709</td>
+<td align="right">2,108</td>
+</tr>
+<tr>
+<td align="right">43</td>
+<td>Kepler-11 g</td>
+<td align="right">6541920</td>
+<td>K00157.05</td>
+<td align="right">0.9677</td>
+<td align="right">13.709</td>
+<td align="right">2,108</td>
+</tr>
+<tr>
+<td align="right">44</td>
+<td>Kepler-1553 b</td>
+<td align="right">3955817</td>
+<td>K04117.01</td>
+<td align="right">0.5498</td>
+<td align="right">14.955</td>
+<td align="right">2,259</td>
+</tr>
+<tr>
+<td align="right">45</td>
+<td>Kepler-1950 b</td>
+<td align="right">7103919</td>
+<td>K04310.01</td>
+<td align="right">0.8444</td>
+<td align="right">14.587</td>
+<td align="right">2,274</td>
+</tr>
+<tr>
+<td align="right">46</td>
+<td>Kepler-1326 b</td>
+<td align="right">4178606</td>
+<td>K02728.01</td>
+<td align="right">0.9149</td>
+<td align="right">12.852</td>
+<td align="right">2,278</td>
+</tr>
+<tr>
+<td align="right">47</td>
+<td>Kepler-1205 b</td>
+<td align="right">6200235</td>
+<td>K02350.01</td>
+<td align="right">0.5710</td>
+<td align="right">15.143</td>
+<td align="right">2,278</td>
+</tr>
+<tr>
+<td align="right">48</td>
+<td>Kepler-356 b</td>
+<td align="right">2307415</td>
+<td>K02053.02</td>
+<td align="right">0.8588</td>
+<td align="right">12.992</td>
+<td align="right">2,308</td>
+</tr>
+<tr>
+<td align="right">49</td>
+<td>Kepler-356 c</td>
+<td align="right">2307415</td>
+<td>K02053.01</td>
+<td align="right">0.9558</td>
+<td align="right">12.992</td>
+<td align="right">2,308</td>
+</tr>
+<tr>
+<td align="right">50</td>
+<td>Kepler-776 b</td>
+<td align="right">6272413</td>
+<td>K01129.01</td>
+<td align="right">0.8772</td>
+<td align="right">15.456</td>
+<td align="right">2,374</td>
+</tr>
+<tr>
+<td align="right">51</td>
+<td>Kepler-559 b</td>
+<td align="right">8043638</td>
+<td>K00460.01</td>
+<td align="right">0.9266</td>
+<td align="right">14.743</td>
+<td align="right">2,533</td>
+</tr>
+<tr>
+<td align="right">52</td>
+<td>Kepler-1595 b</td>
+<td align="right">7427764</td>
+<td>K04364.01</td>
+<td align="right">0.8000</td>
+<td align="right">15.448</td>
+<td align="right">2,756</td>
+</tr>
+<tr>
+<td align="right">53</td>
+<td>Kepler-400 b</td>
+<td align="right">5272233</td>
+<td>K02711.01</td>
+<td align="right">0.9536</td>
+<td align="right">13.642</td>
+<td align="right">2,759</td>
+</tr>
+<tr>
+<td align="right">54</td>
+<td>Kepler-400 c</td>
+<td align="right">5272233</td>
+<td>K02711.02</td>
+<td align="right">0.9355</td>
+<td align="right">13.642</td>
+<td align="right">2,759</td>
+</tr>
+<tr>
+<td align="right">55</td>
+<td>Kepler-575 b</td>
+<td align="right">2557816</td>
+<td>K00488.01</td>
+<td align="right">0.9236</td>
+<td align="right">14.720</td>
+<td align="right">2,785</td>
+</tr>
+<tr>
+<td align="right">56</td>
+<td>Kepler-1457 b</td>
+<td align="right">6584273</td>
+<td>K03287.01</td>
+<td align="right">0.9453</td>
+<td align="right">14.060</td>
+<td align="right">2,902</td>
+</tr>
+<tr>
+<td align="right">57</td>
+<td>Kepler-774 b</td>
+<td align="right">3114811</td>
+<td>K01117.01</td>
+<td align="right">0.9435</td>
+<td align="right">12.808</td>
+<td align="right">2,993</td>
+</tr>
+<tr>
+<td align="right">58</td>
+<td>Kepler-160 b</td>
+<td align="right">7269974</td>
+<td>K00456.02</td>
+<td align="right">0.9383</td>
+<td align="right">14.619</td>
+<td align="right">3,056</td>
+</tr>
+<tr>
+<td align="right">59</td>
+<td>Kepler-160 c</td>
+<td align="right">7269974</td>
+<td>K00456.01</td>
+<td align="right">0.7776</td>
+<td align="right">14.619</td>
+<td align="right">3,056</td>
+</tr>
+<tr>
+<td align="right">60</td>
+<td>Kepler-397 b</td>
+<td align="right">6878240</td>
+<td>K02681.02</td>
+<td align="right">0.6366</td>
+<td align="right">15.996</td>
+<td align="right">3,160</td>
+</tr>
+<tr>
+<td align="right">61</td>
+<td>Kepler-397 c</td>
+<td align="right">6878240</td>
+<td>K02681.01</td>
+<td align="right">0.8524</td>
+<td align="right">15.996</td>
+<td align="right">3,160</td>
+</tr>
+<tr>
+<td align="right">62</td>
+<td>Kepler-798 b</td>
+<td align="right">6693640</td>
+<td>K01245.01</td>
+<td align="right">0.9706</td>
+<td align="right">14.200</td>
+<td align="right">3,171</td>
+</tr>
+<tr>
+<td align="right">63</td>
+<td>Kepler-1746 b</td>
+<td align="right">6766634</td>
+<td>K01375.01</td>
+<td align="right">0.6738</td>
+<td align="right">13.709</td>
+<td align="right">3,195</td>
+</tr>
+<tr>
+<td align="right">64</td>
+<td>Kepler-933 b</td>
+<td align="right">7815744</td>
+<td>K01710.01</td>
+<td align="right">0.9404</td>
+<td align="right">15.469</td>
+<td align="right">3,318</td>
+</tr>
+<tr>
+<td align="right">65</td>
+<td>Kepler-1824 b</td>
+<td align="right">5978559</td>
+<td>K02321.01</td>
+<td align="right">0.9507</td>
+<td align="right">14.710</td>
+<td align="right">3,392</td>
+</tr>
+<tr>
+<td align="right">66</td>
+<td>Kepler-874 b</td>
+<td align="right">7456001</td>
+<td>K01517.01</td>
+<td align="right">0.9646</td>
+<td align="right">14.683</td>
+<td align="right">3,530</td>
+</tr>
+<tr>
+<td align="right">67</td>
+<td>Kepler-1204 b</td>
+<td align="right">6941084</td>
+<td>K02348.01</td>
+<td align="right">0.9176</td>
+<td align="right">15.301</td>
+<td align="right">3,833</td>
+</tr>
+<tr>
+<td align="right">68</td>
+<td>Kepler-1919 b</td>
+<td align="right">8078502</td>
+<td>K03383.01</td>
+<td align="right">0.8432</td>
+<td align="right">15.848</td>
+<td align="right">3,841</td>
+</tr>
+<tr>
+<td align="right">69</td>
+<td>Kepler-1192 b</td>
+<td align="right">8007644</td>
+<td>K02328.01</td>
+<td align="right">0.9433</td>
+<td align="right">15.684</td>
+<td align="right">4,254</td>
+</tr>
+<tr>
+<td align="right">70</td>
+<td>Kepler-823 b</td>
+<td align="right">4135665</td>
+<td>K01339.01</td>
+<td align="right">0.8515</td>
+<td align="right">14.801</td>
+<td align="right">4,531</td>
+</tr>
+<tr>
+<td align="right">71</td>
+<td>Kepler-1292 b</td>
+<td align="right">8081905</td>
+<td>K02619.01</td>
+<td align="right">0.5450</td>
+<td align="right">15.934</td>
+<td align="right">4,871</td>
+</tr>
+<tr>
+<td align="right">72</td>
+<td>Kepler-754 b</td>
+<td align="right">2584163</td>
+<td>K01031.01</td>
+<td align="right">0.8550</td>
+<td align="right">15.160</td>
+<td align="right">5,774</td>
+</tr>
+<tr>
+<td align="right">73</td>
+<td>Kepler-1211 b</td>
+<td align="right">5602588</td>
+<td>K02369.01</td>
+<td align="right">0.8705</td>
+<td align="right">15.832</td>
+<td align="right">5,957</td>
+</tr>
+<tr>
+<td align="right">74</td>
+<td>Kepler-1239 b</td>
+<td align="right">6867555</td>
+<td>K02439.01</td>
+<td align="right">0.9339</td>
+<td align="right">15.438</td>
+<td align="right">6,982</td>
+</tr>
+<tr>
+<td align="right">75</td>
+<td>Kepler-896 b</td>
+<td align="right">7939330</td>
+<td>K01581.02</td>
+<td align="right">0.9127</td>
+<td align="right">15.481</td>
+<td align="right">7,616</td>
+</tr>
+<tr>
+<td align="right">76</td>
+<td>Kepler-896 c</td>
+<td align="right">7939330</td>
+<td>K01581.01</td>
+<td align="right">0.5539</td>
+<td align="right">15.481</td>
+<td align="right">7,616</td>
+</tr>
+<tr>
+<td align="right">77</td>
+<td>Kepler-1603 b</td>
+<td align="right">7046035</td>
+<td>K04424.01</td>
+<td align="right">0.6041</td>
+<td align="right">15.332</td>
+<td align="right">8,847</td>
+</tr>
+<tr>
+<td align="right">78</td>
+<td>Kepler-717 b</td>
+<td align="right">7685981</td>
+<td>K00893.01</td>
+<td align="right">0.8413</td>
+<td align="right">15.662</td>
+<td align="right">9,150</td>
+</tr>
+<tr>
+<td align="right">79</td>
+<td>Kepler-747 b</td>
+<td align="right">5780460</td>
+<td>K01005.01</td>
+<td align="right">0.8230</td>
+<td align="right">15.703</td>
+<td align="right">10,917</td>
+</tr>
+</tbody></table></div>
+<h2 id="section-54">18. 资料来源<a class="heading-anchor" href="#section-54" aria-label="链接到本节">#</a></h2>
+<ul>
+<li>Shallue &amp; Vanderburg, AstroNet原论文：<a href="https://arxiv.org/abs/1712.05044" target="_blank" rel="noopener noreferrer">Identifying Exoplanets with Deep Learning</a></li>
+<li>Google Research官方源码：<a href="https://github.com/google-research/exoplanet-ml" target="_blank" rel="noopener noreferrer">google-research/exoplanet-ml</a></li>
+<li>NASA FDL PyTorch参考实现：<a href="https://gitlab.com/frontierdevelopmentlab/exoplanets/astronet-pytorch" target="_blank" rel="noopener noreferrer">AstroNet-PyTorch</a></li>
+<li>Thompson et al. DR25目录与Robovetter论文：<a href="https://arxiv.org/abs/1710.06758" target="_blank" rel="noopener noreferrer">Planetary Candidates Observed by Kepler VIII</a></li>
+<li>NASA Exoplanet Archive DR25说明：<a href="https://exoplanetarchive.ipac.caltech.edu/docs/Q1Q17-DR25-KOIcompanion.html" target="_blank" rel="noopener noreferrer">Q1-Q17 DR25 KOI Companion</a></li>
+<li>NASA Exoplanet Archive数据产品概览：<a href="https://exoplanetarchive.ipac.caltech.edu/docs/Kepler_Data_Products_Overview.html" target="_blank" rel="noopener noreferrer">Kepler Data Products Overview</a></li>
+<li>NASA Exoplanet Archive行星系统参数字段说明（<code>sy_dist</code>定义）：<a href="https://exoplanetarchive.ipac.caltech.edu/docs/API_PS_columns.html" target="_blank" rel="noopener noreferrer">Planetary Systems and Composite Parameters Column Definitions</a></li>
+<li>NASA Exoplanet Archive综合参数表说明：<a href="https://exoplanetarchive.ipac.caltech.edu/docs/pscp_about.html" target="_blank" rel="noopener noreferrer">About the Planetary Systems Composite Parameters Table</a></li>
+<li>NASA Exoplanet Archive综合参数计算说明：<a href="https://exoplanetarchive.ipac.caltech.edu/docs/pscp_calc.html" target="_blank" rel="noopener noreferrer">Calculated Parameters in PSCompPars</a></li>
+</ul>
+<hr>
+<p>本文中的数值结果来自本机和E5远端项目在2026-07-14的实际执行记录；NASA当前状态和距离也是当日查询快照。pilot100只证明流程闭环；M2证明模型在1000颗恒星上已经学到有效区分能力，但仍属于对DR25标签的一次复现。正式科学结论还需要全量学习曲线、固定独立测试集和独立标签评估。</p>
+</article>
+  </div>
+  <nav class="article-neighbors" aria-label="文章导航"><a href="kepler-dr25-guide.html"><span>上一篇</span><strong>从星光变暗到候选行星</strong></a><span></span></nav>
+</main>
+<footer class="site-footer"><p>Kepler DR25 × AstroNet PyTorch · 数据来自NASA公开档案</p><a href="../index.html">返回首页</a></footer>
+<button class="back-to-top" type="button" aria-label="返回顶部">↑</button>
+</body>
+</html>
