@@ -122,14 +122,20 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .article-meta { color: #9fc2d6; font-size: 13px; }
 .article-hero .hero-actions { margin-top: 28px; }
 
-.article-layout { display: grid; grid-template-columns: 270px minmax(0, 820px); gap: 46px; justify-content: center; align-items: start; max-width: 1210px; margin: 0 auto; padding: 54px 28px 80px; }
+.toc-toolbar { max-width: 1210px; margin: 0 auto; padding: 28px 28px 0; }
+.toc-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 17px; color: var(--navy); background: white; border: 1px solid var(--line); border-radius: 999px; box-shadow: 0 8px 24px rgba(23,50,77,.07); font: inherit; font-size: 13px; font-weight: 750; cursor: pointer; transition: color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.toc-toggle::before { content: "☰"; color: var(--blue); font-size: 16px; line-height: 1; }
+.toc-toggle:hover { color: var(--blue); border-color: #a9c9df; box-shadow: 0 10px 28px rgba(23,50,77,.12); transform: translateY(-1px); }
+.toc-toggle:focus-visible { outline: 3px solid rgba(40,120,181,.25); outline-offset: 3px; }
+.article-layout { display: grid; grid-template-columns: 270px minmax(0, 820px); gap: 46px; justify-content: center; align-items: start; max-width: 1210px; margin: 0 auto; padding: 18px 28px 80px; }
+.article-layout.toc-collapsed { grid-template-columns: minmax(0, 1000px); max-width: 1120px; }
+.article-layout.toc-collapsed .toc-panel { display: none; }
 .toc-panel { position: sticky; top: 96px; max-height: calc(100vh - 120px); overflow: auto; }
 .toc { padding: 19px 18px; background: white; border: 1px solid var(--line); border-radius: 16px; }
 .toc p { margin: 0 0 10px; color: var(--navy); font-size: 13px; font-weight: 800; }
 .toc a { display: block; padding: 5px 8px; color: var(--muted); border-left: 2px solid transparent; font-size: 12px; line-height: 1.45; text-decoration: none; }
 .toc a:hover, .toc a.active { color: var(--blue); border-left-color: var(--blue); background: var(--blue-soft); }
 .toc .toc-level-3 { padding-left: 19px; font-size: 11px; }
-.toc-toggle { display: none; }
 
 .prose { min-width: 0; padding: 48px 55px 60px; background: white; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 18px 50px rgba(23,50,77,.06); }
 .prose > :first-child { margin-top: 0; }
@@ -180,9 +186,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .method-section ol { grid-template-columns: 1fr 1fr; }
   .article-layout { grid-template-columns: 1fr; gap: 18px; }
   .toc-panel { position: static; max-height: none; }
-  .toc-toggle { display: block; width: 100%; padding: 13px 16px; color: var(--navy); background: white; border: 1px solid var(--line); border-radius: 12px; font-weight: 750; text-align: left; }
-  .toc { display: none; margin-top: 8px; max-height: 55vh; overflow: auto; }
-  .toc.open { display: block; }
+  .toc { max-height: 55vh; overflow: auto; }
 }
 
 @media (max-width: 700px) {
@@ -205,7 +209,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .method-section li { min-height: 150px; }
   .article-hero-inner { padding: 55px 22px 50px; }
   .article-hero h1 { font-size: 38px; }
-  .article-layout { padding: 24px 12px 55px; }
+  .toc-toolbar { padding: 20px 12px 0; }
+  .toc-toggle { width: 100%; justify-content: center; }
+  .article-layout { padding: 12px 12px 55px; }
   .prose { padding: 34px 20px 45px; border-radius: 15px; }
   .prose h2 { font-size: 25px; }
   .prose h3 { font-size: 20px; }
@@ -216,7 +222,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 @media print {
-  .site-header, .toc-panel, .hero-actions, .article-neighbors, .site-footer, .back-to-top, .reading-progress { display: none !important; }
+  .site-header, .toc-toolbar, .toc-panel, .hero-actions, .article-neighbors, .site-footer, .back-to-top, .reading-progress { display: none !important; }
   body { background: white; }
   .article-hero { color: var(--navy); background: white; }
   .article-hero-inner { padding: 20mm 16mm 8mm; }

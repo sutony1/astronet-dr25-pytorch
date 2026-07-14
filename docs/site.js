@@ -12,10 +12,12 @@ document.addEventListener("DOMContentLoaded", () => {
   backToTop?.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
   const toggle = document.querySelector(".toc-toggle");
   const toc = document.querySelector(".toc");
+  const articleLayout = document.querySelector(".article-layout");
   toggle?.addEventListener("click", () => {
-    const open = toc?.classList.toggle("open") ?? false;
-    toggle.setAttribute("aria-expanded", String(open));
-    toggle.textContent = open ? "收起本文目录" : "展开本文目录";
+    const visible = !articleLayout?.classList.toggle("toc-collapsed");
+    if (toc) toc.hidden = !visible;
+    toggle.setAttribute("aria-expanded", String(visible));
+    toggle.textContent = visible ? "隐藏本文目录" : "显示本文目录";
   });
 
   const tocLinks = [...document.querySelectorAll(".toc a")];
